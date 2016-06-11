@@ -27,6 +27,6 @@
     "compile": "webpack",
     "postinstall": "webpack",
     "start": "node server.js",
-    "watch": "webpack --watch"
+    "watch": "webpack --watch --watch-poll"
   }
 }
