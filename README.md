@@ -873,3 +873,704 @@ And now you can switch back and forth between the sign-in and home views.
 ---------------
 
 # Step 5: Authentication
+
+It's time to actually hook up the login view. But first, in order to make
+this easier, let's do some refactoring to break up the reducers into smaller
+independent chunks.
+
+### Refactoring to use `combineReducers()`
+
+You can write one big monolithic reducer, but that makes tasks like cleaning
+up state when the view changes confusing. Redux's `combineReducers()` function
+lets you build up a reducer out of independent reducers. First, let's write
+3 separate reducers. First, let's take the global feed reducer logic from
+the home page and stuff it into 'reducers/home.js':
+
+```javascript
+export default (state = {}, action) => {
+  switch (action.type) {
+    case 'HOME_PAGE_LOADED':
+      return {
+        ...state,
+        articles: action.payload.articles
+      };
+  }
+
+  return state;
+};
+```
+
+Next, let's create a 'common' reducer that'll take care of the `appName`
+property:
+
+```javascript
+const defaultState = {
+  appName: 'Conduit'
+};
+
+export default (state = defaultState, action) => {
+  return state;
+};
+```
+
+Finally, let's create a `reducers/auth.js` file that will contain all the
+auth-specific logic. For now, it'll do nothing.
+
+```javascript
+export default (state = {}, action) => {
+  return state;
+};
+```
+
+In `store.js`, let's import in these reducers and build them into a single
+reducer using `combineReducers()`.
+
+```javascript
+import { applyMiddleware, createStore, combineReducers } from 'redux';
+import { promiseMiddleware } from './middleware';
+import auth from './reducers/auth';
+import common from './reducers/common';
+import home from './reducers/home';
+
+const reducer = combineReducers({
+  auth,
+  common,
+  home
+});
+
+const middleware = applyMiddleware(promiseMiddleware);
+
+const store = createStore(reducer, middleware);
+
+export default store;
+```
+
+With these changes, we're going to need to change the `mapStateToProps`
+function for all components that have them. For example, in `App.js`,
+remember that `appName` is now in the `common` reducer? To account for that,
+`mapDispatchToProps()` needs to get `appName` from the state's `common`
+property.
+
+```javascript
+import Header from './Header';
+import Home from './Home';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  appName: state.common.appName
+});
+
+class App extends React.Component {
+  // ...
+}
+
+App.contextTypes = {
+  router: React.PropTypes.object.isRequired
+};
+
+export default connect(mapStateToProps, () => ({}))(App);
+```
+
+Now we need to apply the same changes to the `Home` component:
+
+```javascript
+import Banner from './Banner';
+import MainView from './MainView';
+import React from 'react';
+import agent from '../../agent';
+import { connect } from 'react-redux';
+
+const Promise = global.Promise;
+
+const mapStateToProps = state => ({
+  appName: state.common.appName
+});
+
+const mapDispatchToProps = dispatch => ({
+  // ...
+});
+
+class Home extends React.Component {
+  // ...
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Home);
+```
+
+And the `MainView` component:
+
+```javascript
+import ArticleList from '../ArticleList';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  articles: state.home.articles
+});
+
+const MainView = props => {
+  // ...
+};
+
+export default connect(mapStateToProps, () => ({}))(MainView);
+```
+
+### Wiring the Login Component
+
+First, let's add a `login()` function to `agent.js` that'll actually fire
+off the HTTP request.
+
+```javascript
+// ...
+
+const requests = {
+  get: url =>
+    superagent.get(`${API_ROOT}${url}`).then(responseBody),
+  post: (url, body) =>
+    superagent.post(`${API_ROOT}${url}`, body).then(responseBody)
+};
+
+const Articles = {
+  // ...
+};
+
+const Auth = {
+  login: (email, password) =>
+    requests.post('/users/login', { user: { email, password } })
+};
+
+export default {
+  Articles,
+  Auth
+};
+```
+
+So now, the login component needs to call `agent.Auth.login()` with the
+username and password the user specifies. The Login component and auth
+reducer now need to be able to get the user's input and call the `login()`
+function. First, in the 'Login' component, we need to pull in all the state
+from the 'auth' reducer in `mapStateToProps()` and a `mapDispatchToProps()`
+function that's going to dispatch separate events:
+
+```javascript
+import { Link } from 'react-router';
+import ListErrors from './ListErrors';
+import React from 'react';
+import agent from '../agent';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({ ...state.auth });
+
+const mapDispatchToProps = dispatch => ({
+  onChangeEmail: value =>
+    dispatch({ type: 'UPDATE_FIELD_AUTH', key: 'email', value }),
+  onChangePassword: value =>
+    dispatch({ type: 'UPDATE_FIELD_AUTH', key: 'password', value }),
+  onSubmit: (email, password) =>
+    dispatch({ type: 'LOGIN', payload: agent.Auth.login(email, password) })
+});
+
+class Login extends React.Component {
+  constructor() {
+    super();
+    this.changeEmail = ev => this.props.onChangeEmail(ev.target.value);
+    this.changePassword = ev => this.props.onChangePassword(ev.target.value);
+    this.submitForm = (email, password) => ev => {
+      ev.preventDefault();
+      this.props.onSubmit(email, password);
+    };
+  }
+
+  render() {
+    const email = this.props.email;
+    const password = this.props.password;
+    return (
+      <div className="auth-page">
+        <div className="container page">
+          <div className="row">
+
+            <div className="col-md-6 offset-md-3 col-xs-12">
+              <h1 className="text-xs-center">Sign In</h1>
+              <p className="text-xs-center">
+                <Link to="register">
+                  Need an account?
+                </Link>
+              </p>
+
+              <ListErrors errors={this.props.errors} />
+
+              <form onSubmit={this.submitForm(email, password)}>
+                <fieldset>
+
+                  <fieldset className="form-group">
+                    <input
+                      className="form-control form-control-lg"
+                      type="email"
+                      placeholder="Email"
+                      value={email}
+                      onChange={this.changeEmail} />
+                  </fieldset>
+
+                  <fieldset className="form-group">
+                    <input
+                      className="form-control form-control-lg"
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={this.changePassword} />
+                  </fieldset>
+
+                  <button
+                    className="btn btn-lg btn-primary pull-xs-right"
+                    type="submit"
+                    disabled={this.props.inProgress}>
+                    Sign in
+                  </button>
+
+                </fieldset>
+              </form>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Login);
+```
+
+There's also a ListErrors component that's going to display any errors
+that occurred during login, like if the user entered the wrong password.
+Let's implement this component:
+
+```javascript
+import React from 'react';
+
+class ListErrors extends React.Component {
+  render() {
+    const errors = this.props.errors;
+    if (errors) {
+      return (
+        <ul className="error-messages">
+          {
+            Object.keys(errors).map(key => {
+              return (
+                <li key={key}>
+                  {key} {errors[key]}
+                </li>
+              );
+            })
+          }
+        </ul>
+      );
+    } else {
+      return null;
+    }
+  }
+}
+
+export default ListErrors;
+
+```
+
+The login component is going to dispatch 2 different events: an
+'UPDATE_FIELD_AUTH' event that's going to fire when the user changes an
+input field, and a 'LOGIN' event that's going to fire when the user submits
+the login form.
+
+The input fields need to take the current value of email and password, and
+call the correct functions when they change. Also, if the state says there's
+an auth request in progress, we'll disable the submit button.
+
+### Wiring the Reducers
+
+Next up is the auth reducer. Remember there's 2 events we need to handle
+from the login component, 'LOGIN' and 'UPDATE_FIELD_AUTH', plus we need
+to set the 'inProgress' field when there's a request in progress.
+Let's write separate handlers for each of these events.
+
+```javascript
+export default (state = {}, action) => {
+  switch (action.type) {
+    case 'LOGIN':
+      return {
+        ...state,
+        inProgress: false,
+        errors: action.error ? action.payload.errors : null
+      };
+    case 'ASYNC_START':
+      if (action.subtype === 'LOGIN' || action.subtype === 'REGISTER') {
+        return { ...state, inProgress: true };
+      }
+      break;
+    case 'UPDATE_FIELD_AUTH':
+      return { ...state, [action.key]: action.value };
+  }
+
+  return state;
+};
+```
+
+Let's also change the promise middleware to dispatch an 'ASYNC_START' action
+when an async action starts:
+
+```javascript
+const promiseMiddleware = store => next => action => {
+  if (isPromise(action.payload)) {
+    store.dispatch({ type: 'ASYNC_START', subtype: action.type });
+    action.payload.then(
+      // ...
+    );
+
+    return;
+  }
+
+  next(action);
+};
+
+// ...
+```
+
+Great, now you can actually submit a login request and, if the password
+is incorrect, you get an error. However, when you enter in the right password,
+nothing happens.
+
+### Local Storage Middleware and Redirects
+
+Notice that when you make a successful login request, you get back a user
+object that has a "token". You need to store this token, along with the
+whole user object, in your redux state, and redirect the user back to the
+home page. The right place to put this is
+in your common reducer:
+
+```javascript
+const defaultState = {
+  appName: 'Conduit',
+  token: null
+};
+
+export default (state = defaultState, action) => {
+  case 'APP_LOAD':
+    return {
+      ...state,
+      token: action.token || null,
+      appLoaded: true,
+      currentUser: action.payload ? action.payload.user : null
+    };
+  case 'REDIRECT':
+    return { ...state, redirectTo: null };
+  case 'LOGIN':
+    return {
+      ...state,
+      redirectTo: action.error ? null : '/',
+      token: action.error ? null : action.payload.user.token,
+      currentUser: action.error ? null : action.payload.user
+    };
+  return state;
+};
+```
+
+We're going to take the user token and the user object from the action
+and put it into the `common` property in our store's state. When the app
+loads, we're going to take the currently logged-in user. Also, this
+`redirectTo` property will say where the user should be redirected to.
+Let's hook up the `redirectTo` property to the main `App` component,
+because the `App` component already has access to the router.
+
+```javascript
+import Header from './Header';
+import Home from './Home';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  appName: state.common.appName,
+  redirectTo: state.common.redirectTo
+});
+
+const mapDispatchToProps = dispatch => ({
+  onRedirect: () =>
+    dispatch({ type: 'REDIRECT' })
+});
+
+class App extends React.Component {
+  componentWillReceiveProps(nextProps) {
+    if (nextProps.redirectTo) {
+      this.context.router.replace(nextProps.redirectTo);
+      this.props.onRedirect();
+    }
+  }
+
+  render() {
+    // ...
+  }
+}
+
+App.contextTypes = {
+  router: React.PropTypes.object.isRequired
+};
+
+export default connect(mapStateToProps, mapDispatchToProps)(App);
+```
+
+That's great, but in order to persist the token if the user closes the
+window, you're going to have to put the token into `localStorage`. Let's
+add a middleware to do this.
+
+```javascript
+const localStorageMiddleware = store => next => action => {
+  if (action.type === 'REGISTER' || action.type === 'LOGIN') {
+    if (!action.error) {
+      window.localStorage.setItem('jwt', action.payload.user.token);
+      agent.setToken(action.payload.user.token);
+    }
+  } else if (action.type === 'LOGOUT') {
+    window.localStorage.setItem('jwt', '');
+    agent.setToken(null);
+  }
+
+  next(action);
+};
+
+export {
+  localStorageMiddleware,
+  promiseMiddleware
+};
+```
+
+Once you persist the token in local storage, you need to be able to pull
+the token from local storage as well. Let's put that functionality in the
+'App' component:
+
+```javascript
+import Header from './Header';
+import Home from './Home';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  appName: state.common.appName,
+  currentUser: state.common.currentUser,
+  redirectTo: state.common.redirectTo
+});
+
+const mapDispatchToProps = dispatch => ({
+  onLoad: (payload, token) =>
+    dispatch({ type: 'APP_LOAD', payload, token }),
+  onRedirect: () =>
+    dispatch({ type: 'REDIRECT' })
+});
+
+class App extends React.Component {
+  componentWillMount() {
+    const token = window.localStorage.getItem('jwt');
+    if (token) {
+      agent.setToken(token);
+    }
+
+    this.props.onLoad(token ? agent.Auth.current() : null, token);
+  }
+
+  componentWillReceiveProps(nextProps) {
+    if (nextProps.redirectTo) {
+      this.context.router.replace(nextProps.redirectTo);
+      this.props.onRedirect();
+    }
+  }
+
+  render() {
+    // ...
+  }
+}
+
+App.contextTypes = {
+  router: React.PropTypes.object.isRequired
+};
+
+export default connect(mapStateToProps, mapDispatchToProps)(App);
+```
+
+And add this `agent.Auth.current()` function, which is going to get
+the currently logged-in user.
+
+```javascript
+const Auth = {
+  current: () =>
+    requests.get('/user'),
+  login: (email, password) =>
+    requests.post('/users/login', { user: { email, password } })
+};
+
+// ...
+
+export default {
+  Articles,
+  Auth,
+  setToken: _token => { token = _token; }
+};
+```
+
+### Displaying Login Status in the Nav Bar
+
+Finally, let's tweak the header to show which user is currently logged in.
+We'll add 2 new components to the 'Header' component: one that shows up
+when there's a logged-in user, and one that shows up when there isn't.
+
+```javascript
+'use strict';
+
+import { Link } from 'react-router';
+import React from 'react';
+
+const LoggedOutView = props => {
+  if (!props.currentUser) {
+    return (
+      <ul className="nav navbar-nav pull-xs-right">
+
+        <li className="nav-item">
+          <Link to="/" className="nav-link">
+            Home
+          </Link>
+        </li>
+
+        <li className="nav-item">
+          <Link to="login" className="nav-link">
+            Sign in
+          </Link>
+        </li>
+
+        <li className="nav-item">
+          <Link to="register" className="nav-link">
+            Sign up
+          </Link>
+        </li>
+
+      </ul>
+    );
+  }
+  return null;
+};
+
+const LoggedInView = props => {
+  if (props.currentUser) {
+    return (
+      <ul className="nav navbar-nav pull-xs-right">
+
+        <li className="nav-item">
+          <Link to="" className="nav-link">
+            Home
+          </Link>
+        </li>
+
+        <li className="nav-item">
+          <Link to="editor" className="nav-link">
+            <i className="ion-compose"></i>&nbsp;New Post
+          </Link>
+        </li>
+
+        <li className="nav-item">
+          <Link to="settings" className="nav-link">
+            <i className="ion-gear-a"></i>&nbsp;Settings
+          </Link>
+        </li>
+
+        <li className="nav-item">
+          <Link
+            to={`@${props.currentUser.username}`}
+            className="nav-link">
+            <img src={props.currentUser.image} className="user-pic" />
+            {props.currentUser.username}
+          </Link>
+        </li>
+
+      </ul>
+    );
+  }
+
+  return null;
+};
+
+class Header extends React.Component {
+  render() {
+    return (
+      <nav className="navbar navbar-light">
+        <div className="container">
+
+          <Link to="/" className="navbar-brand">
+            {this.props.appName.toLowerCase()}
+          </Link>
+
+          <LoggedOutView currentUser={this.props.currentUser} />
+
+          <LoggedInView currentUser={this.props.currentUser} />
+        </div>
+      </nav>
+    );
+  }
+}
+
+export default Header;
+```
+
+In order to get this to work, we're going to have to pass the 'currentUser'
+property to the `Header` component from the `App` component, so let's
+tweak the `App` component:
+
+```javascript
+import Header from './Header';
+import Home from './Home';
+import React from 'react';
+import agent from '../agent';
+import { connect } from 'react-redux';
+
+// ...
+
+class App extends React.Component {
+  // ...
+
+  render() {
+    return (
+      <div>
+        <Header
+          currentUser={this.props.currentUser}
+          appName={this.props.appName} />
+        {this.props.children}
+      </div>
+    );
+  }
+}
+
+// ...
+```
+
+And now, when you refresh, you should see the logged in view in the
+nav bar.
+
+---------------
+
+# Step 6: Settings and Registration Forms
+
+---------------
+
+# Step 7: CRUD Operations For Articles and Comments
+
+### Article View
+
+### Comments List
+
+### CRUD Comments
+
+--------------
+
+# Step 8: Component Inheritance With Profile Page
+
+---------------
+
+# Step 9: Tabs and Pagination
+
+---------------
+
+# Step 10: Editor Form
