@@ -649,6 +649,227 @@ ProductionReady.
 
 # Step 4: Multiple Views with React-Router
 
+So far you've scaffolded out a single view that displays the global feed.
+It's a good start, but this site's going to need several more views, so
+let's plug in react-router to make it happen.
+
+### Refactor Store
+
+First off, `index.js` is getting bloated, so let's refactor the redux store
+out into a `store.js` file.
+
+```javascript
+import { applyMiddleware, createStore } from 'redux';
+import { promiseMiddleware } from './middleware';
+
+const defaultState = {
+  appName: 'conduit',
+  articles: null
+};
+const reducer = function(state = defaultState, action) {
+  switch (action.type) {
+    case 'HOME_PAGE_LOADED':
+      return { ...state, articles: action.payload.articles };
+  }
+  return state;
+};
+
+const middleware = applyMiddleware(promiseMiddleware);
+
+const store = createStore(reducer, middleware);
+
+export default store;
+```
+
+And import this file in `index.js`. Now `index.js` is nice and clean,
+and ready to handle routing.
+
+### Setting Up The Routing Structure
+
+React router uses components to map URLs to views. To use react-router,
+import "Router", "Route", "IndexRoute", and "hashHistory" from react-router,
+and declare the routing hierarchy in the `ReactDOM.render()` call.
+The "Router" component instantiates the router, and then "Route" creates
+a route for URLs that says URLs that start with "/" render the "App" component.
+Routes can be nested, so let's create two nested routes.
+
+The first route is an "IndexRoute" that displays the "Home" component. This
+means that going to 'localhost:4000' will display the 'App' component with
+the 'Home' component underneath. The second component will be the 'Login'
+component, which will display the login form, so when you navigate to
+'/login', you'll see the 'App' component with the 'Login' component
+underneath.
+
+```javascript
+import { Provider } from 'react-redux';
+import ReactDOM from 'react-dom';
+import React from 'react';
+import { Router, Route, IndexRoute, hashHistory } from 'react-router';
+
+import App from './components/App';
+import Home from './components/Home';
+import Login from './components/Login';
+import store from './store';
+
+ReactDOM.render((
+  <Provider store={store}>
+    <Router history={hashHistory}>
+      <Route path="/" component={App}>
+        <IndexRoute component={Home} />
+        <Route path="login" component={Login} />
+      </Route>
+    </Router>
+  </Provider>
+), document.getElementById('main'));
+```
+
+Now that your routing structure says which component should be rendered
+within the 'App' component, the 'App' component can no longer hard-code the
+'Home' component, so let's get rid of it. The component to be rendered is
+represented by the `props.children` property if you add this magic
+`App.contextTypes` snippet, which tells react-router to attach the `children`
+property to this component's props.
+
+```javascript
+import Header from './Header';
+import Home from './Home';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  appName: state.appName
+});
+
+class App extends React.Component {
+  render() {
+    return (
+      <div>
+        <Header appName={this.props.appName} />
+        {this.props.children}
+      </div>
+    );
+  }
+}
+
+App.contextTypes = {
+  router: React.PropTypes.object.isRequired
+};
+
+export default connect(mapStateToProps, () => ({}))(App);
+```
+
+### The Login Component
+
+Now that the routing is in place, let's scaffold out the 'Login' component.
+For now, this component will just contain HTML, so there's no need for a
+`mapStateToProps()` or `mapDispatchToProps()` function. Specifically,
+this component will just contain a form with an input for the user to
+enter their email and password.
+
+```javascript
+import React from 'react';
+import { connect } from 'react-redux';
+
+class Login extends React.Component {
+  render() {
+    return (
+      <div className="auth-page">
+        <div className="container page">
+          <div className="row">
+
+            <div className="col-md-6 offset-md-3 col-xs-12">
+              <h1 className="text-xs-center">Sign In</h1>
+              <p className="text-xs-center">
+                <a>
+                  Need an account?
+                </a>
+              </p>
+
+              <form>
+                <fieldset>
+
+                  <fieldset className="form-group">
+                    <input
+                      className="form-control form-control-lg"
+                      type="email"
+                      placeholder="Email" />
+                  </fieldset>
+
+                  <fieldset className="form-group">
+                    <input
+                      className="form-control form-control-lg"
+                      type="password"
+                      placeholder="Password" />
+                  </fieldset>
+
+                  <button
+                    className="btn btn-lg btn-primary pull-xs-right"
+                    type="submit">
+                    Sign in
+                  </button>
+
+                </fieldset>
+              </form>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default connect(() => ({}), () => ({}))(Login);
+```
+
+### React-Router Links
+
+The login component is now wired up to appear when the user navigates to
+'/login'. Let's now use the react-router `Link` component to create some
+links to navigate back and forth between the two views. You shouldn't use
+plain-old HTML 'a' tags with react-router, you need to use the `Link`
+component.
+
+```javascript
+'use strict';
+
+import { Link } from 'react-router';
+import React from 'react';
+
+class Header extends React.Component {
+  render() {
+    return (
+      <nav className="navbar navbar-light">
+        <div className="container">
+
+          <Link to="/" className="navbar-brand">
+            {this.props.appName.toLowerCase()}
+          </Link>
+
+          <ul className="nav navbar-nav pull-xs-right">
+            <li className="nav-item">
+              <Link to="/" className="nav-link">
+                Home
+              </Link>
+            </li>
+
+            <li className="nav-item">
+              <Link to="login" className="nav-link">
+                Sign in
+              </Link>
+            </li>
+          </ul>
+        </div>
+      </nav>
+    );
+  }
+}
+
+export default Header;
+```
+
+And now you can switch back and forth between the sign-in and home views.
+
 ---------------
 
 # Step 5: Authentication
