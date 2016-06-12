@@ -132,3 +132,523 @@ for the checkbox. Now, if you look in the browser, you'll notice you can
 actually toggle the checkbox.
 
 ---------------
+
+# Step 2: Multiple Components with react-redux
+
+Now that you've seen the basics of how redux works, let's break ground on
+the conduit project. Let's start with the global feed of posts. When you
+open up the productionready.io site, you'll
+see there's an HTTP request to this '/api/articles' endpoint that returns
+a list of articles. Let's show this list in our code.
+
+First, let's refactor out the App component into it's own file, add in
+react-redux, and build out the UI that's going to contain the global
+feed.
+
+### Introducing react-redux
+
+```javascript
+import App from './components/App';
+import { Provider } from 'react-redux';
+import ReactDOM from 'react-dom';
+import React from 'react';
+import { applyMiddleware, createStore } from 'redux';
+
+const defaultState = {
+  appName: 'conduit',
+  articles: null
+};
+const reducer = function(state = defaultState, action) {
+  return state;
+};
+
+ReactDOM.render((
+  <Provider store={store}>
+    <App />
+  </Provider>
+), document.getElementById('main'));
+```
+
+The react-redux module is the "official bindings" between react and redux.
+It adds some convenient syntactic sugar for binding your components to
+your redux state. This "Provider" component that you get from react-redux
+is how you tell react-redux about your redux store. Next, let's take a
+look at the new App.js:
+
+```javascript
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  appName: state.appName
+});
+
+class App extends React.Component {
+  render() {
+    return (
+      <div>
+        {this.props.appName}
+      </div>
+    );
+  }
+}
+
+export default connect(mapStateToProps, () => ({}))(App);
+```
+
+The `connect()` function is how react-redux binds your redux state to your
+components. This `mapStateToProps` function maps the global redux state to
+the specific pieces of state that your component cares about and puts them
+into the 'props' property. This is mostly
+for performance and testability purposes. The `connect()` function then
+takes in your `mapStateToProps` function and ties it to your App component.
+
+Don't worry about this second function for now, you'll learn about it later.
+
+### Multiple Components
+
+Now that you've got react-redux running, let's add some new components.
+So far, all you have is this App component, which doesn't do much.
+
+```javascript
+import Header from './Header';
+import Home from './Home';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  appName: state.appName
+});
+
+class App extends React.Component {
+  render() {
+    return (
+      <div>
+        <Header appName={this.props.appName} />
+        <Home />
+      </div>
+    );
+  }
+}
+
+export default connect(mapStateToProps, () => ({}))(App);
+```
+
+First up is this "Header" component. It's going to display the nav bar that
+you see up at the top when you visit ProductionReady. Let's add in a
+`Header.js` file.
+
+```javascript
+'use strict';
+
+import React from 'react';
+
+class Header extends React.Component {
+  render() {
+    return (
+      <nav className="navbar navbar-light">
+        <div className="container">
+
+          <a className="navbar-brand">
+            {this.props.appName.toLowerCase()}
+          </a>
+        </div>
+      </nav>
+    );
+  }
+}
+
+export default Header;
+```
+
+Next, let's build up this 'Home' component. This component is going to
+contain the global feed. The Home component is going to be pretty complicated,
+so let's separate it out into it's own directory. The top-level component
+is going to take in the top-level app name as a property from react-redux:
+
+```javascript
+import Banner from './Banner';
+import MainView from './MainView';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  appName: state.appName
+});
+
+class Home extends React.Component {
+  render() {
+    return (
+      <div className="home-page">
+
+        <Banner appName={this.props.appName} />
+
+        <div className="container page">
+          <div className="row">
+            <MainView />
+
+            <div className="col-md-3">
+              <div className="sidebar">
+
+                <p>Popular Tags</p>
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    );
+  }
+}
+
+export default connect(mapStateToProps, () => ({}))(Home);
+```
+
+This component is going to have 2 sub-components: Banner and MainView.
+The Banner component is going to take in a property, the 'appName', which
+the Home component gets from react-redux.
+The Banner component is this big hero banner. The component's pretty
+straightforward, just HTML and CSS.
+
+```javascript
+import React from 'react';
+
+const Banner = ({ appName }) => {
+  return (
+    <div className="banner">
+      <div className="container">
+        <h1 className="logo-font">
+          {appName.toLowerCase()}
+        </h1>
+        <p>A place to share your knowledge.</p>
+      </div>
+    </div>
+  );
+};
+
+export default Banner;
+```
+
+Notice that, in this case, the component is a function, not a class.
+This function shorthand lets you declare simple components more easily.
+
+Next up, let's create the 'MainView' component. This component will get a
+list of articles from the redux state and pass the list off to an "ArticleList"
+component.
+
+```javascript
+import ArticleList from '../ArticleList';
+import React from 'react';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  articles: state.articles
+});
+
+const MainView = props => {
+  return (
+    <div className="col-md-9">
+      <div className="feed-toggle">
+        <ul className="nav nav-pills outline-active">
+
+        <li className="nav-item">
+          <a
+            href=""
+            className="nav-link active">
+            Global Feed
+          </a>
+        </li>
+
+        </ul>
+      </div>
+
+      <ArticleList
+        articles={props.articles} />
+    </div>
+  );
+};
+
+export default connect(mapStateToProps, () => ({}))(MainView);
+```
+
+The ArticleList component will be responsible for actually
+rendering the list of articles, so let's implement that.
+
+```javascript
+import React from 'react';
+
+const ArticleList = props => {
+  if (!props.articles) {
+    return (
+      <div className="article-preview">Loading...</div>
+    );
+  }
+
+  if (props.articles.length === 0) {
+    return (
+      <div className="article-preview">
+        No articles are here... yet.
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {
+        props.articles.map(article => {
+          return (
+            <h2>{article.title}</h2>
+          );
+        })
+      }
+    </div>
+  );
+};
+
+export default ArticleList;
+```
+
+If articles is undefined, we'll assume the articles are loading. If
+there are no articles, we'll put a preview message, and otherwise we'll
+display an H2 with the article title.
+
+Great! So now when you pull up your local server you'll see this
+"Loading..." message. Next step is to actually run the HTTP request and
+put the result into the redux state.
+
+---------------------------
+
+# Step 3: Displaying the Global Feed with Middleware
+
+First step, let's add an `agent.js` file that's going to use the superagent
+HTTP client library to make an HTTP request to the ProductionReady API.
+
+```javascript
+'use strict';
+
+import superagentPromise from 'superagent-promise';
+import _superagent from 'superagent';
+
+const superagent = superagentPromise(_superagent, global.Promise);
+
+const API_ROOT = 'https://conduit.productionready.io/api';
+
+const responseBody = res => res.body;
+
+const requests = {
+  get: url =>
+    superagent.get(`${API_ROOT}${url}`).then(responseBody)
+};
+
+const Articles = {
+  all: page =>
+    requests.get(`/articles?limit=10`)
+};
+
+export default {
+  Articles
+};
+```
+
+All you need to do now is get the value that the `agent.Articles.all()`
+promise resolves to into redux. Let's call this function when the `Home`
+component loads.
+
+### Promise middleware
+
+```javascript
+import Banner from './Banner';
+import MainView from './MainView';
+import React from 'react';
+import agent from '../../agent';
+import { connect } from 'react-redux';
+
+const Promise = global.Promise;
+
+const mapStateToProps = state => ({
+  appName: state.appName
+});
+
+const mapDispatchToProps = dispatch => ({
+  onLoad: (payload) =>
+    dispatch({ type: 'HOME_PAGE_LOADED', payload }),
+});
+
+class Home extends React.Component {
+  componentWillMount() {
+    this.props.onLoad(agent.Articles.all());
+  }
+
+  render() {
+    // ...
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Home);
+```
+
+This `mapDispatchToProps` function is the second function that gets passed
+to react-redux's `connect()` function. The `mapDispatchToProps()` function
+maps the Redux store's `dispatch()` function to functions. Each function that
+`mapDispatchToProps()` returns gets attached to the component's `props`. This
+means your component can call `this.props.onLoad()` to fire off an
+event with type 'HOME_PAGE_LOADED' and a 'payload'. This payload will contain
+the HTTP promise.
+
+The right place to call the promise is in the `componentWillMount()` function.
+This `componentWillMount()` function is what's known as a "lifecycle hook"
+It'll get called when this component gets created, so let's put the
+initialization logic here.
+
+Great, so now you're dispatching an action that has a 'payload' property that
+contains a promise. Redux has a concept called "middleware", which lets you
+intercept and transform actions. Let's write some middleware that'll intercept
+actions where the 'payload' property is a promise.
+
+```javascript
+const promiseMiddleware = store => next => action => {
+  if (isPromise(action.payload)) {
+    action.payload.then(
+      res => {
+        action.payload = res;
+        store.dispatch(action);
+      },
+      error => {
+        action.error = true;
+        action.payload = error.response.body;
+        store.dispatch(action);
+      }
+    );
+
+    return;
+  }
+
+  next(action);
+};
+
+function isPromise(v) {
+  return v && typeof v.then === 'function';
+}
+
+export {
+  promiseMiddleware
+};
+```
+
+Great, now you need to plug this middleware into the redux store. Back in
+`index.js`, let's use this `createMiddleware` function that redux exports to
+plug the promise middleware into redux.
+
+```javascript
+import App from './components/App';
+import { Provider } from 'react-redux';
+import ReactDOM from 'react-dom';
+import React from 'react';
+import { applyMiddleware, createStore } from 'redux';
+import { promiseMiddleware } from './middleware';
+
+const defaultState = {
+  // ...
+};
+const reducer = function(state = defaultState, action) {
+  // ...
+};
+const store = createStore(reducer, applyMiddleware(promiseMiddleware));
+
+// ...
+```
+
+### Article Preview
+
+With this code you now get an ugly list that contains the list of
+articles. Let's make this prettier and add in yet another component.
+Let's call this component "ArticlePreview". It'll take in an article
+and display the standard ProductionReady preview for it.
+
+```javascript
+import React from 'react';
+
+const ArticlePreview = props => {
+  const article = props.article;
+
+  return (
+    <div className="article-preview">
+      <div className="article-meta">
+        <a>
+          <img src={article.author.image} />
+        </a>
+
+        <div className="info">
+          <a className="author">
+            {article.author.username}
+          </a>
+          <span className="date">
+            {new Date(article.createdAt).toDateString()}
+          </span>
+        </div>
+
+        <div className="pull-xs-right">
+          <button
+            className="btn btn-sm btn-outline-primary">
+            <i className="ion-heart"></i> {article.favoritesCount}
+          </button>
+        </div>
+      </div>
+
+      <a to={`article/${article.slug}`} className="preview-link">
+        <h1>{article.title}</h1>
+        <p>{article.description}</p>
+        <span>Read more...</span>
+        <ul className="tag-list">
+          {
+            article.tagList.map(tag => {
+              return (
+                <li className="tag-default tag-pill tag-outline" key={tag}>
+                  {tag}
+                </li>
+              )
+            })
+          }
+        </ul>
+      </a>
+    </div>
+  );
+}
+
+export default ArticlePreview;
+```
+
+Now, let's plug this component into the `ArticleList` component:
+
+```javascript
+import ArticlePreview from './ArticlePreview';
+import React from 'react';
+
+const ArticleList = props => {
+  // ...
+  return (
+    <div>
+      {
+        props.articles.map(article => {
+          return (
+            <ArticlePreview article={article} />
+          );
+        })
+      }
+    </div>
+  );
+};
+// ...
+```
+
+And now you have a pretty list of articles that looks just like
+ProductionReady.
+
+---------------
+
+# Step 4: Multiple Views with React-Router
+
+---------------
+
+# Step 5: Authentication
