@@ -1553,6 +1553,489 @@ nav bar.
 
 # Step 6: Settings and Registration Forms
 
+Next up is the registration and settings views. The settings view lets you
+modify your profile, and the registration view is
+a form that lets you sign up for a new account. Let's start off with the
+registration view, because it's similar to the login view.
+
+### Registration View
+
+First off, let's add a `register` function to `agent.js`:
+
+`src/reducers/agent.js`
+
+```javascript
+// ...
+
+const Auth = {
+  current: () =>
+    requests.get('/user'),
+  login: (email, password) =>
+    requests.post('/users/login', { user: { email, password } }),
+  register: (username, email, password) =>
+    requests.post('/users', { user: { username, email, password } })
+};
+
+// ...
+```
+
+Now, we need a `Register` component and corresponding reducers. For the
+reducers, first we need to update the auth state in the same way that
+the login reducer does:
+
+`src/reducers/auth.js`
+
+```javascript
+export default (state = {}, action) => {
+  switch (action.type) {
+    case 'LOGIN':
+    case 'REGISTER':
+      return {
+        ...state,
+        inProgress: false,
+        errors: action.error ? action.payload.errors : null
+      };
+  // ...
+};
+```
+
+That handles registration errors. When registration succeeds, the
+ProductionReady API gives you a token in the same way login does, so
+we also need to change the common reducer:
+
+`src/reducers/common.js`
+
+```javascript
+export default (state = defaultState, action) => {
+  switch (action.type) {
+    // ...
+    case 'LOGIN':
+    case 'REGISTER':
+      return {
+        ...state,
+        redirectTo: action.error ? null : '/',
+        token: action.error ? null : action.payload.user.token,
+        currentUser: action.error ? null : action.payload.user
+      };
+  }
+  return state;
+};
+```
+
+Like login, when register succeeds we'll redirect to the main view and
+attach the token and current user from the payload. Now, let's add the
+Register component.
+
+`src/components/Register.js`
+
+```javascript
+import { Link } from 'react-router';
+import ListErrors from './ListErrors';
+import React from 'react';
+import agent from '../agent';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({ ...state.auth });
+
+const mapDispatchToProps = dispatch => ({
+  onChangeEmail: value =>
+    dispatch({ type: 'UPDATE_FIELD_AUTH', key: 'email', value }),
+  onChangePassword: value =>
+    dispatch({ type: 'UPDATE_FIELD_AUTH', key: 'password', value }),
+  onChangeUsername: value =>
+    dispatch({ type: 'UPDATE_FIELD_AUTH', key: 'username', value }),
+  onSubmit: (username, email, password) => {
+    const payload = agent.Auth.register(username, email, password);
+    dispatch({ type: 'REGISTER', payload })
+  }
+});
+
+class Register extends React.Component {
+  constructor() {
+    super();
+    this.changeEmail = ev => this.props.onChangeEmail(ev.target.value);
+    this.changePassword = ev => this.props.onChangePassword(ev.target.value);
+    this.changeUsername = ev => this.props.onChangeUsername(ev.target.value);
+    this.submitForm = (username, email, password) => ev => {
+      ev.preventDefault();
+      this.props.onSubmit(username, email, password);
+    }
+  }
+
+  render() {
+    const email = this.props.email;
+    const password = this.props.password;
+    const username = this.props.username;
+
+    return (
+      <div className="auth-page">
+        <div className="container page">
+          <div className="row">
+
+            <div className="col-md-6 offset-md-3 col-xs-12">
+              <h1 className="text-xs-center">Sign Up</h1>
+              <p className="text-xs-center">
+                <Link to="login">
+                  Have an account?
+                </Link>
+              </p>
+
+              <ListErrors errors={this.props.errors} />
+
+              <form onSubmit={this.submitForm(username, email, password)}>
+                <fieldset>
+
+                  <fieldset className="form-group">
+                    <input
+                      className="form-control form-control-lg"
+                      type="text"
+                      placeholder="Username"
+                      value={this.props.username}
+                      onChange={this.changeUsername} />
+                  </fieldset>
+
+                  <fieldset className="form-group">
+                    <input
+                      className="form-control form-control-lg"
+                      type="email"
+                      placeholder="Email"
+                      value={this.props.email}
+                      onChange={this.changeEmail} />
+                  </fieldset>
+
+                  <fieldset className="form-group">
+                    <input
+                      className="form-control form-control-lg"
+                      type="password"
+                      placeholder="Password"
+                      value={this.props.password}
+                      onChange={this.changePassword} />
+                  </fieldset>
+
+                  <button
+                    className="btn btn-lg btn-primary pull-xs-right"
+                    type="submit"
+                    disabled={this.props.inProgress}>
+                    Sign in
+                  </button>
+
+                </fieldset>
+              </form>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Register);
+```
+
+Now, let's see the registration view in action. If you go to the `register`
+route, you'll see this registration route, and you can register for a new
+account and see yourself logged in.
+
+### Settings
+
+Now that you're done with the registration form, let's implement a more
+complex form: the `Settings` form. The settings form lets you modify
+your profile picture, your username, your bio, your email address, and
+your password, as well as logout.
+
+First off, let's add the ability to save the current user to `agent.js`.
+For ProductionReady, this takes the form of a `put` request.
+
+`src/agent.js`
+
+```javascript
+// ...
+
+const Auth = {
+  current: () =>
+    requests.get('/user'),
+  login: (email, password) =>
+    requests.post('/users/login', { user: { email, password } }),
+  register: (username, email, password) =>
+    requests.post('/users', { user: { username, email, password } }),
+  save: user =>
+    requests.put('/user', { user })
+};
+
+// ...
+```
+
+Next, let's add a reducer to handle the settings view. In this case,
+you're not going to store the state of inputs in the redux store, so
+there's not going to be an 'UPDATE_FIELD' action like in the login and
+registration views.
+
+`src/reducers/settings.js`
+
+```javascript
+export default (state = {}, action) => {
+  switch (action.type) {
+    case 'SETTINGS_SAVED':
+      return {
+        ...state,
+        inProgress: false,
+        errors: action.error ? action.payload.errors : null
+      };
+    case 'ASYNC_START':
+      return {
+        ...state,
+        inProgress: true
+      };
+  }
+
+  return state;
+};
+```
+
+There's only 2 actions that this reducer will care about: 'ASYNC_START',
+which  will fire when the user hits submit, and 'SETTINGS_SAVED', which will
+fire when the save request to the server completes. Everything else will be
+stored in the component itself. Let's tweak `store.js` to add this new reducer
+to our main reducer.
+
+`src/store.js`
+
+```javascript
+const reducer = combineReducers({
+  auth,
+  common,
+  home,
+  settings
+});
+```
+
+Next up, let's add handlers for the logout button and the 'SETTINGS_SAVED'
+button to the common reducer.
+
+`src/reducers/common.js`
+
+```javascript
+// ...
+
+export default (state = defaultState, action) => {
+  switch (action.type) {
+    // ...
+    case 'REDIRECT':
+      return { ...state, redirectTo: null };
+    case 'LOGOUT':
+      return { ...state, redirectTo: '/', token: null, currentUser: null };
+    case 'SETTINGS_SAVED':
+      return {
+        ...state,
+        redirectTo: action.error ? null : '/',
+        currentUser: action.error ? null : action.payload.user
+      };
+    case 'LOGIN':
+    // ...
+  }
+  return state;
+};
+```
+
+Now, let's create a 'Settings' component that will contain our form.
+First, let's write the high-level component.
+
+`src/components/Register.js`
+
+```javascript
+import ListErrors from './ListErrors';
+import React from 'react';
+import { Link } from 'react-router';
+import agent from '../agent';
+import { connect } from 'react-redux';
+
+const mapStateToProps = state => ({
+  ...state.settings,
+  currentUser: state.common.currentUser
+});
+
+const mapDispatchToProps = dispatch => ({
+  onClickLogout: () => dispatch({ type: 'LOGOUT' }),
+  onSubmitForm: user =>
+    dispatch({ type: 'SETTINGS_SAVED', payload: agent.Auth.save(user) })
+});
+
+class Settings extends React.Component {
+  render() {
+    return (
+      <div className="settings-page">
+        <div className="container page">
+          <div className="row">
+            <div className="col-md-6 offset-md-3 col-xs-12">
+
+              <h1 className="text-xs-center">Your Settings</h1>
+
+              <ListErrors errors={this.props.errors}></ListErrors>
+
+              <SettingsForm
+                currentUser={this.props.currentUser}
+                onSubmitForm={this.props.onSubmitForm} />
+
+              <hr />
+
+              <button
+                className="btn btn-outline-danger"
+                onClick={this.props.onClickLogout}>
+                Or click here to logout.
+              </button>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Settings);
+```
+
+This component can trigger the 2 events that we care about, 'SETTINGS_SAVED'
+and 'LOGIN'. However, this 'SettingsForm' component is where the actual
+form and internal state will live.
+
+`src/components/Register.js`
+
+```javascript
+class SettingsForm extends React.Component {
+  constructor() {
+    super();
+
+    this.state = {
+      image: '',
+      username: '',
+      bio: '',
+      email: '',
+      password: ''
+    };
+
+    this.updateState = field => ev => {
+      const state = this.state;
+      const newState = Object.assign({}, state, { [field]: ev.target.value });
+      this.setState(newState);
+    };
+
+    this.submitForm = ev => {
+      ev.preventDefault();
+
+      const user = Object.assign({}, this.state);
+      if (!user.password) {
+        delete user.password;
+      }
+
+      this.props.onSubmitForm(user);
+    };
+  }
+
+  componentWillMount() {
+    if (this.props.currentUser) {
+      Object.assign(this.state, {
+        image: this.props.currentUser.image || '',
+        username: this.props.currentUser.username,
+        bio: this.props.currentUser.bio,
+        email: this.props.currentUser.email
+      });
+    }
+  }
+
+  componentWillReceiveProps(nextProps) {
+    if (nextProps.currentUser) {
+      this.setState(Object.assign({}, this.state, {
+        image: nextProps.currentUser.image || '',
+        username: nextProps.currentUser.username,
+        bio: nextProps.currentUser.bio,
+        email: nextProps.currentUser.email
+      }));
+    }
+  }
+
+  render() {
+    return (
+      <form onSubmit={this.submitForm}>
+        <fieldset>
+
+          <fieldset className="form-group">
+            <input
+              className="form-control"
+              type="text"
+              placeholder="URL of profile picture"
+              value={this.state.image}
+              onChange={this.updateState('image')} />
+          </fieldset>
+
+          <fieldset className="form-group">
+            <input
+              className="form-control form-control-lg"
+              type="text"
+              placeholder="Username"
+              value={this.state.username}
+              onChange={this.updateState('username')} />
+          </fieldset>
+
+          <fieldset className="form-group">
+            <textarea
+              className="form-control form-control-lg"
+              rows="8"
+              placeholder="Short bio about you"
+              value={this.state.bio}
+              onChange={this.updateState('bio')}>
+            </textarea>
+          </fieldset>
+
+          <fieldset className="form-group">
+            <input
+              className="form-control form-control-lg"
+              type="email"
+              placeholder="Email"
+              value={this.state.email}
+              onChange={this.updateState('email')} />
+          </fieldset>
+
+          <fieldset className="form-group">
+            <input
+              className="form-control form-control-lg"
+              type="password"
+              placeholder="New Password"
+              value={this.state.password}
+              onChange={this.updateState('password')} />
+          </fieldset>
+
+          <button
+            className="btn btn-lg btn-primary pull-xs-right"
+            type="submit"
+            disabled={this.state.inProgress}>
+            Update Settings
+          </button>
+
+        </fieldset>
+      </form>
+    );
+  }
+}
+```
+
+See this `updateState` function? React component state doesn't necessarily
+have to go through redux. Each component has its own state container, so
+we can store the state of the form within the component. All we need to
+do is make sure to call the `onSubmitForm` function when the user submits
+the form and pass the data out of the component.
+
+There's a few more subtleties here, because the form needs to be
+pre-populated with the current user's data. We don't want the form to
+be blank when the user loads, so we need 2 lifecycle hooks. First,
+on `componentWillMount()`, we'll check if there's a current user and
+initialize our state. Second, there's a `componentWillReceiveProps()`
+hook, which gets called when the component's 'props' will change. If
+the current user changes, we'll update the form with the new information.
+
+### Cleaning Up State
+
 ---------------
 
 # Step 7: CRUD Operations For Articles and Comments
