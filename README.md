@@ -2034,17 +2034,99 @@ initialize our state. Second, there's a `componentWillReceiveProps()`
 hook, which gets called when the component's 'props' will change. If
 the current user changes, we'll update the form with the new information.
 
+Great, so now that this form is done, let's add it to `index.js` and
+check it out in the browser.
+
+```javascript
+// ...
+import App from './components/App';
+import Home from './components/Home';
+import Login from './components/Login';
+import Register from './components/Register';
+import Settings from './components/Settings';
+import store from './store';
+
+ReactDOM.render((
+  <Provider store={store}>
+    <Router history={hashHistory}>
+      <Route path="/" component={App}>
+        <IndexRoute component={Home} />
+        <Route path="login" component={Login} />
+        <Route path="register" component={Register} />
+        <Route path="settings" component={Settings} />
+      </Route>
+    </Router>
+  </Provider>
+), document.getElementById('main'));
+```
+
 ### Cleaning Up State
+
+Now we've got 3 different views, however, let's say I type in something
+in the login screen, go to the home page, and then go back to the sign in
+page. Looks like the text I entered is still there. That's because redux
+stores are global state, so you need to be extra careful to clean up the
+state when you change views.
+
+Thankfully, life cycle hooks and `combineReducers()` makes this pretty easy,
+all you need to do is emit an action when a component will unload and
+return an empty object for the state. Let's do this for the Login component:
+
+`src/components/Login.js`
+
+```javascript
+// ...
+
+const mapDispatchToProps = dispatch => ({
+  // ...
+  onUnload: () =>
+    dispatch({ type: 'LOGIN_PAGE_UNLOADED' })
+});
+
+class Login extends React.Component {
+  // ...
+
+  componentWillUnmount() {
+    this.props.onUnload();
+  }
+
+  // ...
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Login);
+```
+
+So when the component will unmount, we'll dispatch a `LOGIN_PAGE_UNLOADED`
+action. Let's handle this action in the `auth` reducer.
+
+`src/reducers/auth.js`
+
+```javascript
+export default (state = {}, action) => {
+  switch (action.type) {
+    // ...
+    case 'LOGIN_PAGE_UNLOADED':
+    case 'REGISTER_PAGE_UNLOADED':
+      return {};
+    case 'ASYNC_START':
+      if (action.subtype === 'LOGIN' || action.subtype === 'REGISTER') {
+        return { ...state, inProgress: true };
+      }
+      break;
+    // ...
+  }
+
+  return state;
+};
+```
+
+So when this action gets dispatched, we'll empty out the auth state. Now
+you can switch back and forth between the login view and the home view,
+and see that the input on the login view gets cleared.
 
 ---------------
 
 # Step 7: CRUD Operations For Articles and Comments
-
-### Article View
-
-### Comments List
-
-### CRUD Comments
 
 --------------
 
