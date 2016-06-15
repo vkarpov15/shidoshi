@@ -2130,7 +2130,7 @@ and see that the input on the login view gets cleared.
 
 --------------
 
-# Step 8: Component Inheritance With Profile Page
+# Step 8: Profile View, Component Inheritance
 
 ---------------
 
