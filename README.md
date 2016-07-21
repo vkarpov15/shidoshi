@@ -1176,9 +1176,9 @@ export default ListErrors;
 
 ```
 
-The login component is going to dispatch 2 different events: an
-'UPDATE_FIELD_AUTH' event that's going to fire when the user changes an
-input field, and a 'LOGIN' event that's going to fire when the user submits
+The login component is going to dispatch 2 different actions: an
+'UPDATE_FIELD_AUTH' action that's going to fire when the user changes an
+input field, and a 'LOGIN' action that's going to fire when the user submits
 the login form.
 
 The input fields need to take the current value of email and password, and
@@ -1187,10 +1187,10 @@ an auth request in progress, we'll disable the submit button.
 
 ### Wiring the Reducers
 
-Next up is the auth reducer. Remember there's 2 events we need to handle
+Next up is the auth reducer. Remember there's 2 actions we need to handle
 from the login component, 'LOGIN' and 'UPDATE_FIELD_AUTH', plus we need
 to set the 'inProgress' field when there's a request in progress.
-Let's write separate handlers for each of these events.
+Let's write separate handlers for each of these actions.
 
 ```javascript
 export default (state = {}, action) => {
