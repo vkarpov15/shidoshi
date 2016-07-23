@@ -161,6 +161,8 @@ property, because React sanitizes HTML by default.
 Finally there's this `CommentContainer` component that's going to contain
 our comments.
 
+### Wiring Up The Reducer
+
 Next, let's add a basic `article` reducer:
 
 `src/reducers/article.js`
