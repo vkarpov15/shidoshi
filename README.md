@@ -1841,7 +1841,7 @@ export default (state = defaultState, action) => {
 Now, let's create a 'Settings' component that will contain our form.
 First, let's write the high-level component.
 
-`src/components/Register.js`
+`src/components/Settings.js`
 
 ```javascript
 import ListErrors from './ListErrors';
@@ -1900,7 +1900,9 @@ This component can trigger the 2 events that we care about, 'SETTINGS_SAVED'
 and 'LOGIN'. However, this 'SettingsForm' component is where the actual
 form and internal state will live.
 
-`src/components/Register.js`
+### Creating the SettingsForm Component
+
+`src/components/Settings.js`
 
 ```javascript
 class SettingsForm extends React.Component {
