@@ -306,7 +306,7 @@ the author and edit and delete buttons.
 
 `src/Article/ArticleMeta.js`
 
-```javascrpt
+```javascript
 import ArticleActions from './ArticleActions';
 import { Link } from 'react-router';
 import React from 'react';
