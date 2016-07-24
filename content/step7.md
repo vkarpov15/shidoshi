@@ -469,7 +469,7 @@ const CommentContainer = props => {
     return (
       <div className="col-xs-12 col-md-8 offset-md-2">
         <div>
-          <list-errors errors={props.errors}></list-errors>
+          <ListErrors errors={props.errors}></ListErrors>
           <CommentInput slug={props.slug} currentUser={props.currentUser} />
         </div>
 
