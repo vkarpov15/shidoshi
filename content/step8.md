@@ -305,6 +305,8 @@ const FollowUserButton = props => {
 };
 ```
 
+### Wiring Up The Reducer
+
 Now, let's add the corresponding profile reducer:
 
 `src/reducers/profile.js`
