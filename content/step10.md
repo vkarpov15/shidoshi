@@ -146,8 +146,18 @@ class Editor extends React.Component {
   componentWillUnmount() {
     this.props.onUnload();
   }
+}
 
-  render() {
+export default connect(mapStateToProps, mapDispatchToProps)(Editor);
+```
+
+### Editor Component Render Function
+
+Next let's write the actual render function
+
+```javascript
+class Editor extends React.Component {
+render() {
     return (
       <div className="editor-page">
         <div className="container page">
@@ -230,9 +240,6 @@ class Editor extends React.Component {
     );
   }
 }
-
-export default connect(mapStateToProps, mapDispatchToProps)(Editor);
-```
 
 Next up, we need to wire up react-router to use this component in `index.js`
 
