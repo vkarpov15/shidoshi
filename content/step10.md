@@ -240,6 +240,7 @@ render() {
     );
   }
 }
+```
 
 Next up, we need to wire up react-router to use this component in `index.js`
 
